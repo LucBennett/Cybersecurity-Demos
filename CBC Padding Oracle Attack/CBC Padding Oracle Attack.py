@@ -32,7 +32,8 @@ def attack_single_block(iv, block, oracle):
 
     # Begin attack: discover each byte of D_K(C)
     for i in reversed(range(BLOCKSIZE)):  # process bytes from last to first
-        print("BYTE", i)
+        # Align 'vv' pointer over the ith byte
+        print(f"    {' ' * (i * 2)}vv")
 
         # Try every possible guess for this byte (0–255)
         for g in range(0x100):
@@ -46,40 +47,36 @@ def attack_single_block(iv, block, oracle):
                 + xor(iv_list[(i + 1) :], [BLOCKSIZE - i] * (BLOCKSIZE - (i + 1)))
             )
 
-            # Align 'vv' pointer over the ith byte
-            print(f"    {' ' * (i * 2)}vv")
-            print(f"IV' {iv1.hex()}")
-
             # Ask the oracle whether the padding is valid
             dk, r = oracle.decrypt_check(block, iv1)
-            print(f"DK  {dk.hex()}")
+            # dk is not needed for the attack, just to help demonstrate what is happening on the otherside
+            print(f"\rIV' {iv1.hex()} -> DK  {dk.hex()}", end="")
 
             if r:
                 # The oracle says the padding is valid — now confirm if it’s a true match
                 if i == BLOCKSIZE - 1:
                     # Last byte: could be accidental; verify by changing the previous byte
-                    print("THINK I FOUND IT", g)
+                    print("\nTHINK I FOUND IT", hex(g))
                     iv2 = (
                         iv1[: (i - 1)]
                         + ((iv1[(i - 1)] + 1) % 0x100).to_bytes(1, "big")
                         + iv1[((i - 1) + 1) :]
                     )
-                    print(f"    {' ' * (i * 2)}vv")
-                    print(f"IV' {iv2.hex()}")
                     dk2, r2 = oracle.decrypt_check(block, iv2)
-                    print(f"DK  {dk2.hex()}")
+                    # dk2 is not needed for the attack, just to help demonstrate what is happening on the otherside
+                    print(f"\rIV' {iv2.hex()} -> DK  {dk2.hex()}", end="")
                     if r2:
                         # Confirmed correct padding — we’ve found D_K(C)[i]
-                        print("\t", "CONFIRMED", g)
+                        print("\n", "CONFIRMED", hex(g))
                         iv_list[i] = g ^ (BLOCKSIZE - i)
                         break
                     else:
                         # False positive, keep guessing
-                        print("\t", "FAIL", g)
+                        print("\n", "False Positive", hex(g))
                         continue
                 else:
                     # For all other bytes, a valid padding result means success
-                    print("FOUND IT", g)
+                    print("\nFOUND IT", hex(g))
                     iv_list[i] = g ^ (BLOCKSIZE - i)
                     break
         else:
@@ -89,7 +86,7 @@ def attack_single_block(iv, block, oracle):
 
     # Once all intermediate bytes are recovered, XOR with the true IV to get plaintext
     plain = xor(iv_list, iv)
-    print("Plain", plain)
+    print("Block Plaintext:", plain)
     return plain
 
 
@@ -111,4 +108,4 @@ if __name__ == "__main__":
         plain_block = attack_single_block(prev_block, block, oracle)
         plain += plain_block
         prev_block = block
-    print(plain)
+    print("Complete Plaintext:", plain)
